@@ -10,3 +10,7 @@ pyrightconfig.json
 # Virtual environments
 .venv
 .env
+
+# data
+uploads/
+test.db
