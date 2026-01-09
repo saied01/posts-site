@@ -5,6 +5,7 @@ build/
 dist/
 wheels/
 *.egg-info
+pyrightconfig.json
 
 # Virtual environments
 .venv
