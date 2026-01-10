@@ -43,7 +43,7 @@ async def upload_file(
     post = Post(
             caption=caption,
             url=f"/files/{filename}",
-            file_type="photo",
+            file_type=file.content_type,
             file_name=filename
             )
     session.add(post)
