@@ -18,10 +18,10 @@ class Post(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     caption = Column(Text)
-    url = Column(String, nullable=False)
-    file_type = Column(String, nullable=False)
+    url = Column(String, nullable=True)
+    file_type = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    file_name = Column(String, nullable=False)
+    file_name = Column(String, nullable=True)
 
 
 engine = create_async_engine(DATABASE_URL)

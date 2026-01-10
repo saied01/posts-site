@@ -1,5 +1,7 @@
 from typing import Optional
-from fastapi import FastAPI, HTTPException, File, UploadFile, Form, Depends
+import uuid
+from pathlib import Path as FSPath
+from fastapi import FastAPI, HTTPException, File, Path, UploadFile, Form, Depends
 from httpx import options
 from sqlalchemy.engine import result
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,24 +29,31 @@ app.mount("/files", StaticFiles(directory=UPLOAD_DIR), name="files")
 
 @app.post("/upload")
 async def upload_file(
-        file:UploadFile=File(...),
+        file: UploadFile  | None = File(None),
         caption:str=Form(""),
         session:AsyncSession=Depends(get_async_session)
         ):
-    filename = file.filename
-    if filename is None:
-        raise ValueError("filename is required")
+    file_name = None
+    file_url = None
+    file_type = None
+    if file is not None:
+        filename = file.filename
+        if filename is None:
+            raise ValueError("filename is required")
 
-    file_path = os.path.join(UPLOAD_DIR, filename)
+        file_path = os.path.join(UPLOAD_DIR, filename)
 
-    with open(file_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+        with open(file_path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+        file_url = f"/files/{filename}"
+        file_name = filename
+        file_type = file.content_type
 
     post = Post(
             caption=caption,
-            url=f"/files/{filename}",
-            file_type=file.content_type,
-            file_name=filename
+            url=file_url,
+            file_type=file_type,
+            file_name=file_name
             )
     session.add(post)
     await session.commit()
@@ -75,36 +84,33 @@ async def get_home(session:AsyncSession=Depends(get_async_session)):
     return posts_data
 
 
+@app.delete("/posts/{post_id}")
+async def delete_post(
+        post_id:str,
+        session:AsyncSession=Depends(get_async_session)
+        ):
+    try:
+        post_uuid = uuid.UUID(post_id)
+        result = await session.execute(select(Post).where(Post.id == post_uuid))
+        post = result.scalars().first()
 
-# OLD
+        if not post:
+            raise HTTPException(status_code=404, detail="Post not found")
 
-text_posts = {
-    1: {"title": "test post", "content": "test content"},
-    2: {"title": "post two", "content": "content for post two"},
-    3: {"title": "post three", "content": "content for post three"},
-    4: {"title": "post four", "content": "content for post four"},
-    5: {"title": "post five", "content": "content for post five"},
-    6: {"title": "post six", "content": "content for post six"},
-    7: {"title": "post seven", "content": "content for post seven"},
-    8: {"title": "post eight", "content": "content for post eight"},
-}
+        if post.url is not None:
+            filename = post.url.removeprefix("/files/")
+            file_path = FSPath(UPLOAD_DIR) / filename
 
-@app.get("/posts")
-def get_all_posts(limit:Optional[int] = None):
-    if limit:
-        return list(text_posts.values())[:limit]
-    return text_posts
+            print(file_path)
 
+            if file_path.exists():
+                file_path.unlink()
 
-@app.get("/posts/{id}")
-def get_post(id:int):
-    if  id not in text_posts:
-        raise HTTPException(status_code=400,detail="post not found")
-    return text_posts.get(id)
+        await session.delete(post)
+        await session.commit()
 
-@app.post("/posts")
-def create_post(post:PostCreate) -> dict[str,str]:
-    new_post = {"title":post.title, "content":post.content}
-    text_posts[max(text_posts.keys()) + 1] = new_post
-    return new_post
+        return {"success": True, "message": "Post deleted successfully"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
