@@ -2,16 +2,16 @@ from typing import Optional
 import uuid
 from pathlib import Path as FSPath
 from fastapi import FastAPI, HTTPException, File, Path, UploadFile, Form, Depends
-from httpx import options
 from sqlalchemy.engine import result
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.schemas import PostCreate
-from app.db import Post, create_db,get_async_session
+from app.schemas import UserCreate, UserRead, UserUpdate
+from app.db import Post, create_db,get_async_session, User
 from contextlib import asynccontextmanager
 from sqlalchemy import select
 from fastapi.staticfiles import StaticFiles
 import os
 import shutil
+from app.users import auth_backend, current_active_user, fastapi_users
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -26,11 +26,17 @@ app = FastAPI(lifespan=span)
 
 app.mount("/files", StaticFiles(directory=UPLOAD_DIR), name="files")
 
+app.include_router(fastapi_users.get_auth_router(auth_backend), prefix='/auth/jwt', tags=["auth"])
+app.include_router(fastapi_users.get_register_router(UserRead, UserCreate), prefix='/auth', tags=["auth"])
+app.include_router(fastapi_users.get_reset_password_router(), prefix='/auth', tags=["auth"])
+app.include_router(fastapi_users.get_verify_router(UserRead), prefix='/auth', tags=["auth"])
+app.include_router(fastapi_users.get_users_router(UserRead, UserUpdate), prefix='/users', tags=["users"])
 
 @app.post("/upload")
 async def upload_file(
         file: UploadFile  | None = File(None),
         caption:str=Form(""),
+        user:User = Depends(current_active_user),
         session:AsyncSession=Depends(get_async_session)
         ):
     file_name = None
@@ -50,6 +56,7 @@ async def upload_file(
         file_type = file.content_type
 
     post = Post(
+            user_id = user.id,
             caption=caption,
             url=file_url,
             file_type=file_type,
@@ -87,7 +94,8 @@ async def get_home(session:AsyncSession=Depends(get_async_session)):
 @app.delete("/posts/{post_id}")
 async def delete_post(
         post_id:str,
-        session:AsyncSession=Depends(get_async_session)
+        session:AsyncSession=Depends(get_async_session),
+        user:User = Depends(current_active_user),
         ):
     try:
         post_uuid = uuid.UUID(post_id)
