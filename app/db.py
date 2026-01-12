@@ -2,7 +2,7 @@ from collections.abc import AsyncGenerator
 import uuid
 
 from fastapi import Depends
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Table, null, true
+from sqlalchemy import Boolean, Column, String, Text, DateTime, ForeignKey, Table, null, true
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
@@ -27,6 +27,7 @@ user_follows = Table(
 class User(SQLAlchemyBaseUserTableUUID, Base):
     __tablename__ = "users"
 
+    created_at = Column(DateTime, default=datetime.utcnow)
     posts = relationship("Post", back_populates="user")
     # following = relationship(
     #         "User",

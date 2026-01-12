@@ -1,8 +1,6 @@
-from typing import Optional
 import uuid
 from pathlib import Path as FSPath
-from fastapi import FastAPI, HTTPException, File, Path, UploadFile, Form, Depends
-from sqlalchemy.engine import result
+from fastapi import FastAPI, HTTPException, File, Path, UploadFile, Form, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas import UserCreate, UserRead, UserUpdate
 from app.db import Post, create_db,get_async_session, User
@@ -33,7 +31,7 @@ app.include_router(fastapi_users.get_verify_router(UserRead), prefix='/auth', ta
 app.include_router(fastapi_users.get_users_router(UserRead, UserUpdate), prefix='/users', tags=["users"])
 
 @app.post("/upload")
-async def upload_file(
+async def upload_post(
         file: UploadFile  | None = File(None),
         caption:str=Form(""),
         user:User = Depends(current_active_user),
@@ -91,6 +89,20 @@ async def get_home(session:AsyncSession=Depends(get_async_session)):
     return posts_data
 
 
+@app.get("/users")
+async def get_users(session:AsyncSession=Depends(get_async_session)):
+    result = await session.execute(select(User).order_by(User.created_at.desc()))
+    users = []
+    for r in result.all():
+        users.append(r[0])
+
+    return users
+
+@app.get("/debug/headers")
+async def debug_headers(request: Request):
+    return dict(request.headers)
+
+
 @app.delete("/posts/{post_id}")
 async def delete_post(
         post_id:str,
@@ -121,4 +133,7 @@ async def delete_post(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+
 

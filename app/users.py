@@ -1,5 +1,5 @@
 import uuid
-from fastapi import Depends, Request
+from fastapi import Depends, Request, Response
 from fastapi_users import BaseUserManager, FastAPIUsers, UUIDIDMixin, models
 from fastapi_users.authentication import AuthenticationBackend, BearerTransport, JWTStrategy
 from fastapi_users.db import SQLAlchemyUserDatabase
@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 import os
 
 load_dotenv()
-# TODO: fix users/me
 SECRET:str = os.environ["USERS_SECRET"]
 JWT_LIFETIME:int = int(os.environ["JWT_LIFETIME"])
 
@@ -18,6 +17,15 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
 
     async def on_after_register(self, user: User, request: Request | None = None) -> None:
         print(user.email, user.id)
+
+    async def on_after_login(self, user: User, request: Request | None = None, response: Response | None = None) -> None:
+        if user.is_active:
+            print("activo")
+        else:
+            print("not activo")
+        # if not user.is_active:
+        #     user.is_active = True
+        #     await self.user_db.update(user)
 
 
 async def get_user_manager(user_db:SQLAlchemyUserDatabase = Depends(get_user_db)):
