@@ -1,13 +1,11 @@
-from collections.abc import AsyncGenerator
 import uuid
 
 from fastapi import Depends
 from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Table
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.ext import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi_users.db import SQLAlchemyBaseUserTableUUID, SQLAlchemyUserDatabase, SQLAlchemyBaseOAuthAccountTableUUID
 
 DATABASE_URL = "sqlite+aiosqlite:///./test.db"
@@ -27,7 +25,11 @@ user_follows = Table(
 class User(SQLAlchemyBaseUserTableUUID, Base):
     __tablename__ = "users"
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        )
     posts = relationship("Post", back_populates="user")
     # following = relationship(
     #         "User",
@@ -44,7 +46,11 @@ class Post(Base):
     caption = Column(Text, nullable=False)
     url = Column(String, nullable=True)
     file_type = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        )
     file_name = Column(String, nullable=True)
     file_storage_path = Column(String, nullable=True)
     file_storage_name = Column(String, nullable=True)

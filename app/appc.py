@@ -2,7 +2,6 @@ import uuid
 from pathlib import Path as FSPath
 from fastapi import FastAPI, HTTPException, File, Path, UploadFile, Form, Depends, Request, APIRouter
 from fastapi.responses import FileResponse
-from sqlalchemy.engine import result
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas import UserCreate, UserRead, UserUpdate
 from app.db import Post, create_db,get_async_session, User
