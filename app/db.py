@@ -2,7 +2,7 @@ from collections.abc import AsyncGenerator
 import uuid
 
 from fastapi import Depends
-from sqlalchemy import Boolean, Column, String, Text, DateTime, ForeignKey, Table, null, true
+from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Table
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
@@ -46,6 +46,9 @@ class Post(Base):
     file_type = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     file_name = Column(String, nullable=True)
+    file_storage_path = Column(String, nullable=True)
+    file_storage_name = Column(String, nullable=True)
+    file_status = Column(String)
 
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     user = relationship("User", back_populates="posts")

@@ -1,18 +1,19 @@
 import uuid
 from pathlib import Path as FSPath
-from fastapi import FastAPI, HTTPException, File, Path, UploadFile, Form, Depends, Request
+from fastapi import FastAPI, HTTPException, File, Path, UploadFile, Form, Depends, Request, APIRouter
+from fastapi.responses import FileResponse
+from sqlalchemy.engine import result
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas import UserCreate, UserRead, UserUpdate
 from app.db import Post, create_db,get_async_session, User
 from contextlib import asynccontextmanager
 from sqlalchemy import select
-from fastapi.staticfiles import StaticFiles
 import os
 import shutil
 from app.users import auth_backend, current_active_user, fastapi_users
+from configs.config import UPLOAD_DIR
+from services.file_processing import get_storage_name, normalize_filename
 
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @asynccontextmanager
 async def span(app:FastAPI):
@@ -21,8 +22,7 @@ async def span(app:FastAPI):
 
 app = FastAPI(lifespan=span)
 
-
-app.mount("/files", StaticFiles(directory=UPLOAD_DIR), name="files")
+router = APIRouter(prefix="/files", dependencies=[Depends(current_active_user)])
 
 app.include_router(fastapi_users.get_auth_router(auth_backend), prefix='/auth/jwt', tags=["auth"])
 app.include_router(fastapi_users.get_register_router(UserRead, UserCreate), prefix='/auth', tags=["auth"])
@@ -38,27 +38,35 @@ async def upload_post(
         session:AsyncSession=Depends(get_async_session)
         ):
     file_name = None
-    file_url = None
+    storage_name = None
+    storage_path = None
     file_type = None
+    status = "none"
     if file is not None:
         filename = file.filename
         if filename is None:
             raise ValueError("filename is required")
 
-        file_path = os.path.join(UPLOAD_DIR, filename)
 
-        with open(file_path, "wb") as f:
-            shutil.copyfileobj(file.file, f)
-        file_url = f"/files/{filename}"
-        file_name = filename
+        storage_name = get_storage_name(filename)
+        storage_path = os.path.join(UPLOAD_DIR,storage_name)
+        file_name = normalize_filename(filename)
         file_type = file.content_type
+
+
+        with open(storage_path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+        status = "uploaded"
+
 
     post = Post(
             user_id = user.id,
             caption=caption,
-            url=file_url,
             file_type=file_type,
-            file_name=file_name
+            file_name=file_name,
+            file_storage_path = str(storage_path),
+            file_storage_name = storage_name,
+            file_status = status
             )
     session.add(post)
     await session.commit()
@@ -117,8 +125,8 @@ async def delete_post(
         if not post:
             raise HTTPException(status_code=404, detail="Post not found")
 
-        if post.url is not None:
-            filename = post.url.removeprefix("/files/")
+        if post.file_storage_path is not None:
+            filename = post.file_storage_name
             file_path = FSPath(UPLOAD_DIR) / filename
 
             print(file_path)
@@ -135,5 +143,34 @@ async def delete_post(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/download/{post_id}")
+async def download_post_file(
+        post_id:str,
+        session:AsyncSession=Depends(get_async_session),
+        user:User=Depends(current_active_user)
+        ):
+    post_uuid = uuid.UUID(post_id)
+    result = await session.execute(select(Post).where(Post.id == post_uuid))
+    post = result.scalars().first()
+
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    if str(post.file_status) != "uploaded":
+        raise HTTPException(status_code=409, detail="File not ready")
+
+    path = post.file_storage_path
+    path = FSPath(str(path))
+
+    if not path.exists():
+        raise HTTPException(status_code=410, detail="File missing")
 
 
+    return FileResponse(
+            path=path,
+            media_type=str(post.file_type),
+            filename=str(post.file_name),
+            )
+
+
+app.include_router(router)
